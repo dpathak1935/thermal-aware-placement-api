@@ -10,6 +10,15 @@ const authKeysRouter = require('./routes/authKeys');
 const app = express();
 app.use(express.json());
 
+// Allow the browser-based frontend (hosted on a different origin) to call this API
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // Health check — no auth required
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'thermal-placement-api' }));
 
