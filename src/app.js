@@ -22,6 +22,9 @@ app.use((req, res, next) => {
 // Health check — no auth required
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'thermal-placement-api' }));
 
+// Serve the frontend (public/index.html) at the root URL
+app.use(express.static('public'));
+
 // Swagger UI — reviewable without reading code
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/openapi.json', (req, res) => res.json(swaggerSpec));
