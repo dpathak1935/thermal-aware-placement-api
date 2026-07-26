@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thermal Placement — Slot Finder</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #151b23;
+    --panel-border: #232b36;
+    --text: #e6e8eb;
+    --text-dim: #8b96a5;
+    --cool: #3fa9f5;
+    --warm: #f5a623;
+    --hot: #f5484a;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 32px 16px 64px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--warm);
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 26px;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin: 0; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+  }
+
+  .key-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  button {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    border-radius: 7px;
+    padding: 11px 18px;
+    cursor: pointer;
+    transition: transform 0.08s ease, opacity 0.15s ease;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--warm); color: #14100a; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.92; }
+  .status-chip {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .status-chip.pending { color: var(--text-dim); }
+  .status-chip.ok { background: rgba(63,169,245,0.12); color: var(--cool); }
+  .status-chip.err { background: rgba(245,72,74,0.12); color: var(--hot); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 14px 0 6px;
+  }
+  label:first-of-type { margin-top: 0; }
+  input {
+    width: 100%;
+    background: #0a0e13;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+  input:focus { outline: none; border-color: var(--cool); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+
+  .find-btn {
+    width: 100%;
+    background: var(--cool);
+    color: #071018;
+    margin-top: 20px;
+    padding: 13px;
+    font-size: 15px;
+  }
+  .find-btn:hover:not(:disabled) { opacity: 0.92; }
+
+  /* Result */
+  .result { display: none; }
+  .result.show { display: block; }
+  .result-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  .result-header .slot-name {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--warm);
+  }
+  .result-header .cost {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .rack-grid {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .rack-row { display: grid; gap: 6px; }
+  .slot-cell {
+    aspect-ratio: 2/1;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: #0a0e13;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .slot-cell.recommended {
+    background: rgba(245,166,35,0.15);
+    border-color: var(--warm);
+    color: var(--warm);
+    font-weight: 700;
+  }
+  .slot-cell.occupied {
+    background: rgba(245,72,74,0.08);
+    color: var(--hot);
+  }
+
+  .breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+  .factor {
+    background: #0a0e13;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    padding: 10px 12px;
+  }
+  .factor .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .factor .value { font-family: var(--mono); font-size: 16px; margin-top: 2px; }
+
+  .alt-list { margin-top: 16px; }
+  .alt-list .label { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+  .alt-item {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 13px;
+    padding: 8px 0; border-top: 1px solid var(--panel-border);
+    color: var(--text-dim);
+  }
+
+  .error-box {
+    background: rgba(245,72,74,0.08);
+    border: 1px solid rgba(245,72,74,0.3);
+    color: var(--hot);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-top: 14px;
+    display: none;
+  }
+  .error-box.show { display: block; }
+
+  footer { text-align: center; margin-top: 24px; font-size: 12px; color: var(--text-dim); }
+  footer a { color: var(--cool); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Thermal-Aware Placement</div>
+    <h1>Where should this node go?</h1>
+    <p class="sub">Describe your rack and the new hardware's power draw. The engine scores every open slot and tells you the safest one.</p>
+  </header>
+
+  <div class="panel">
+    <h2>01 — Access</h2>
+    <div class="key-row">
+      <button class="btn-primary" id="genKeyBtn">Generate API key</button>
+      <span class="status-chip pending" id="keyStatus"><span class="dot"></span>Not connected</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>02 — Rack layout</h2>
+    <div class="grid-2">
+      <div>
+        <label for="rows">Rows</label>
+        <input type="number" id="rows" value="4" min="1" max="12">
+      </div>
+      <div>
+        <label for="cols">Columns</label>
+        <input type="number" id="cols" value="2" min="1" max="8">
+      </div>
+    </div>
+    <label for="existingRow">Existing hot node — row, col (optional)</label>
+    <div class="grid-2">
+      <input type="number" id="existingRow" placeholder="e.g. 1" min="0">
+      <input type="number" id="existingCol" placeholder="e.g. 0" min="0">
+    </div>
+    <label for="existingWatts">Existing node's power draw (watts)</label>
+    <input type="number" id="existingWatts" placeholder="e.g. 500">
+    <p class="hint">Leave the existing-node fields blank for an empty rack.</p>
+  </div>
+
+  <div class="panel">
+    <h2>03 — New hardware</h2>
+    <label for="newWatts">Power draw of the node you're placing (watts)</label>
+    <input type="number" id="newWatts" value="450">
+    <button class="find-btn" id="findBtn" disabled>Generate an API key first</button>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <div class="panel result" id="resultPanel">
+    <h2>Result</h2>
+    <div class="result-header">
+      <div class="slot-name" id="slotName">—</div>
+      <div class="cost" id="costLine">—</div>
+    </div>
+    <div class="rack-grid" id="rackGrid"></div>
+    <div class="breakdown" id="breakdown"></div>
+    <div class="alt-list" id="altList"></div>
+  </div>
+
+  <footer>API: <a href="https://thermal-aware-placement-api-production.up.railway.app/docs" target="_blank">Swagger docs</a></footer>
+</div>
+
+<script>
+const API_BASE = ''; // same origin — frontend and API are served together now
+let apiKey = null;
+let lastLayout = { rows: 4, cols: 2, occupied: null };
+
+const genKeyBtn = document.getElementById('genKeyBtn');
+const keyStatus = document.getElementById('keyStatus');
+const findBtn = document.getElementById('findBtn');
+const errorBox = document.getElementById('errorBox');
+
+function setStatus(el, cls, text) {
+  el.className = 'status-chip ' + cls;
+  el.innerHTML = '<span class="dot"></span>' + text;
+}
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.add('show');
+}
+function clearError() {
+  errorBox.classList.remove('show');
+  errorBox.textContent = '';
+}
+
+genKeyBtn.addEventListener('click', async () => {
+  genKeyBtn.disabled = true;
+  setStatus(keyStatus, 'pending', 'Requesting key…');
+  clearError();
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: 'frontend-user-' + Date.now(),
+        scopes: ['racks:read', 'racks:write', 'optimize:run', 'placements:read']
+      })
+    });
+    if (!res.ok) throw new Error('Server returned ' + res.status);
+    const data = await res.json();
+    apiKey = data.api_key;
+    setStatus(keyStatus, 'ok', 'Connected');
+    findBtn.disabled = false;
+    findBtn.textContent = 'Find the safest slot';
+  } catch (err) {
+    setStatus(keyStatus, 'err', 'Failed to connect');
+    showError('Could not reach the API to generate a key: ' + err.message);
+    genKeyBtn.disabled = false;
+  }
+});
+
+findBtn.addEventListener('click', async () => {
+  clearError();
+  document.getElementById('resultPanel').classList.remove('show');
+  findBtn.disabled = true;
+  findBtn.textContent = 'Working…';
+
+  const rows = parseInt(document.getElementById('rows').value, 10) || 1;
+  const cols = parseInt(document.getElementById('cols').value, 10) || 1;
+  const exRow = document.getElementById('existingRow').value;
+  const exCol = document.getElementById('existingCol').value;
+  const exWatts = document.getElementById('existingWatts').value;
+  const newWatts = parseFloat(document.getElementById('newWatts').value) || 0;
+
+  const nodes = [];
+  let occupiedCoord = null;
+  if (exRow !== '' && exCol !== '' && exWatts !== '') {
+    nodes.push({ name: 'existing-node', row: parseInt(exRow, 10), col: parseInt(exCol, 10), thermal_output_watts: parseFloat(exWatts) });
+    occupiedCoord = `${exRow},${exCol}`;
+  }
+  lastLayout = { rows, cols, occupied: occupiedCoord };
+
+  try {
+    const rackRes = await fetch(`${API_BASE}/api/racks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ name: 'rack-' + Date.now(), rows, columns: cols, nodes })
+    });
+    if (!rackRes.ok) throw new Error('Rack creation failed (' + rackRes.status + ')');
+    const rack = await rackRes.json();
+
+    const optRes = await fetch(`${API_BASE}/api/optimize/thermal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({ rack_id: rack.id, new_node: { name: 'new-node', thermal_output_watts: newWatts } })
+    });
+    if (!optRes.ok) throw new Error('Optimization failed (' + optRes.status + ')');
+    const result = await optRes.json();
+
+    renderResult(result);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    findBtn.disabled = false;
+    findBtn.textContent = 'Find the safest slot';
+  }
+});
+
+function renderResult(result) {
+  document.getElementById('slotName').textContent = result.recommended_slot;
+  document.getElementById('costLine').textContent = 'cost ' + result.cost;
+
+  // Rack grid visual
+  const gridEl = document.getElementById('rackGrid');
+  gridEl.innerHTML = '';
+  const { rows, cols, occupied } = lastLayout;
+  const recommendedRC = result.recommended_slot.match(/slot-(\d+)-(\d+)$/);
+  const recRow = recommendedRC ? recommendedRC[1] : null;
+  const recCol = recommendedRC ? recommendedRC[2] : null;
+
+  for (let r = 0; r < rows; r++) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'rack-row';
+    rowEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'slot-cell';
+      const coord = `${r},${c}`;
+      if (occupied === coord) {
+        cell.classList.add('occupied');
+        cell.textContent = 'hot';
+      } else if (String(r) === recRow && String(c) === recCol) {
+        cell.classList.add('recommended');
+        cell.textContent = '★';
+      } else {
+        cell.textContent = `${r},${c}`;
+      }
+      rowEl.appendChild(cell);
+    }
+    gridEl.appendChild(rowEl);
+  }
+
+  // Breakdown
+  const bEl = document.getElementById('breakdown');
+  bEl.innerHTML = '';
+  const labels = {
+    neighbor_heat_sum: 'Neighbor heat',
+    airflow_penalty: 'Airflow',
+    vertical_stack_penalty: 'Heat stacking',
+    zone_headroom_deficit: 'Zone headroom'
+  };
+  Object.entries(result.breakdown).forEach(([key, val]) => {
+    const f = document.createElement('div');
+    f.className = 'factor';
+    f.innerHTML = `<div class="label">${labels[key] || key}</div><div class="value">${val}</div>`;
+    bEl.appendChild(f);
+  });
+
+  // Alternatives
+  const altEl = document.getElementById('altList');
+  altEl.innerHTML = '<div class="label">Backup options</div>';
+  (result.alternatives || []).forEach(alt => {
+    const row = document.createElement('div');
+    row.className = 'alt-item';
+    row.innerHTML = `<span>${alt.slot}</span><span>cost ${alt.cost}</span>`;
+    altEl.appendChild(row);
+  });
+
+  document.getElementById('resultPanel').classList.add('show');
+}
+</script>
+</body>
+</html>
